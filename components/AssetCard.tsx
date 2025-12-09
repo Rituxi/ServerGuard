@@ -7,17 +7,12 @@ interface AssetCardProps {
   onDelete?: (filename: string) => void;
 }
 
-export const AssetCard: React.FC<AssetCardProps> = ({ asset, onRename, onDelete }) => {
+export const AssetCard: React.FC<AssetCardProps> = ({ asset }) => {
   const [hasError, setHasError] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [imgSrc, setImgSrc] = useState(asset.url);
   const [dimensions, setDimensions] = useState<{width: number, height: number} | null>(null);
   
-  // Renaming State
-  const [isEditing, setIsEditing] = useState(false);
-  const [editName, setEditName] = useState(asset.originalName);
-  const [isRenaming, setIsRenaming] = useState(false);
-
   // Copy State
   const [isCopied, setIsCopied] = useState(false);
 
@@ -45,21 +40,6 @@ export const AssetCard: React.FC<AssetCardProps> = ({ asset, onRename, onDelete 
     });
   };
 
-  const handleSaveRename = async () => {
-    if (!editName || editName === asset.originalName) {
-        setIsEditing(false);
-        setEditName(asset.originalName);
-        return;
-    }
-    
-    setIsRenaming(true);
-    const success = await onRename(asset.originalName, editName);
-    setIsRenaming(false);
-    if (success) {
-        setIsEditing(false);
-    }
-  };
-
   const formatFileSize = (bytes?: number) => {
       if (!bytes) return '未知大小';
       if (bytes === 0) return '0 Bytes';
@@ -72,24 +52,6 @@ export const AssetCard: React.FC<AssetCardProps> = ({ asset, onRename, onDelete 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col h-full transition-all hover:shadow-md relative group">
       
-      <div className="absolute top-2 right-2 z-50 flex gap-2">
-         {/* Delete Button */}
-        {onDelete && !isEditing && (
-            <button 
-            onClick={(e) => {
-                e.stopPropagation();
-                onDelete(asset.originalName);
-            }}
-            className="bg-white hover:bg-red-500 hover:text-white text-gray-400 hover:border-red-500 p-2 rounded-full shadow-sm border border-gray-200 transition-all active:scale-95 flex items-center justify-center cursor-pointer"
-            title="永久删除"
-            >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
-            </button>
-        )}
-      </div>
-
       {/* Image Preview Area */}
       <div className="relative aspect-video w-full bg-gray-100 overflow-hidden border-b border-gray-100 flex items-center justify-center group-hover:bg-gray-50 transition-colors">
         
@@ -129,51 +91,11 @@ export const AssetCard: React.FC<AssetCardProps> = ({ asset, onRename, onDelete 
       <div className="p-4 flex-1 flex flex-col">
         <div className="flex items-start justify-between mb-2 gap-2">
             <div className="flex-1 min-w-0">
-                {isEditing ? (
-                    <div className="flex items-center gap-1">
-                        <input 
-                            type="text" 
-                            value={editName}
-                            onChange={(e) => setEditName(e.target.value)}
-                            className="w-full text-sm border border-blue-400 rounded px-2 py-1 outline-none focus:ring-2 focus:ring-blue-100"
-                            placeholder="输入新文件名..."
-                            autoFocus
-                            onKeyDown={(e) => {
-                                if (e.key === 'Enter') handleSaveRename();
-                                if (e.key === 'Escape') {
-                                    setIsEditing(false);
-                                    setEditName(asset.originalName);
-                                }
-                            }}
-                        />
-                        <button onClick={handleSaveRename} disabled={isRenaming} className="text-green-600 hover:bg-green-50 p-1 rounded">
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                            </svg>
-                        </button>
-                        <button onClick={() => { setIsEditing(false); setEditName(asset.originalName); }} className="text-gray-400 hover:bg-gray-100 p-1 rounded">
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                        </button>
-                    </div>
-                ) : (
-                    <div className="flex items-center gap-2 group/title">
-                        <h3 className="font-bold text-gray-900 text-lg truncate" title={asset.originalName}>
-                            {asset.name}
-                        </h3>
-                        {/* Edit Icon */}
-                        <button 
-                            onClick={() => setIsEditing(true)}
-                            className="text-gray-400 hover:text-blue-500 opacity-0 group-hover/title:opacity-100 transition-opacity"
-                            title="重命名文件"
-                        >
-                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                            </svg>
-                        </button>
-                    </div>
-                )}
+                <div className="flex items-center gap-2 group/title">
+                    <h3 className="font-bold text-gray-900 text-lg truncate" title={asset.originalName}>
+                        {asset.name}
+                    </h3>
+                </div>
                 
                 <div className="flex items-center gap-2 mt-1">
                   <span className="text-xs font-mono px-1.5 py-0.5 rounded border bg-blue-50 text-blue-600 border-blue-200">
@@ -210,7 +132,7 @@ export const AssetCard: React.FC<AssetCardProps> = ({ asset, onRename, onDelete 
         </div>
 
         {/* Show original filename if it's different from display name */}
-        {asset.name !== asset.originalName && !isEditing && (
+        {asset.name !== asset.originalName && (
             <div className="mt-2 pt-2 border-t border-gray-100">
                  <p className="text-[10px] text-gray-400 truncate">文件名: {asset.originalName}</p>
             </div>

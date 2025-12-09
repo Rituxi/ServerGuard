@@ -17,13 +17,9 @@ function App() {
   const [status, setStatus] = useState<AppStatus>(AppStatus.STOPPED);
   const [startTime, setStartTime] = useState<number | null>(null);
   
-  // Hidden input ref for adding new files
-  const addFileRef = useRef<HTMLInputElement>(null);
-  
   const [assets, setAssets] = useState<HostedAsset[]>([]);
   const [logs, setLogs] = useState<SystemLog[]>([]);
   const [currentUrl, setCurrentUrl] = useState('');
-  const [isUploading, setIsUploading] = useState(false);
   
   // Refs for intervals
   const keepAliveIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -93,7 +89,7 @@ function App() {
       throw new Error("Invalid response");
 
     } catch (e) {
-      addLog(`连接警告：后端服务未响应。请检查 Zeabur 设置中的 "Output Directory" 是否已清空。`, 'warning');
+      addLog(`连接警告：后端服务未响应。请检查 Zeabur 设置。`, 'warning');
     }
   }, [addLog]);
 
@@ -115,7 +111,7 @@ function App() {
                  addLog('后端服务：连接成功 (Node.js)', 'success');
             })
             .catch(() => {
-                 addLog('环境检测：API 不可用。Zeabur 可能正在以静态模式运行，请清空 "Output Directory" 设置。', 'error');
+                 addLog('环境检测：API 不可用。Zeabur 可能正在以静态模式运行。', 'error');
             });
         
         if (keepAliveIntervalRef.current) clearInterval(keepAliveIntervalRef.current);
@@ -138,91 +134,6 @@ function App() {
     };
   }, [startServer, addLog, fetchAssets]);
 
-  // Handle file selection and UPLOAD to server
-  const handleNewFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setIsUploading(true);
-    addLog(`正在上传: ${file.name}...`, 'info');
-
-    const formData = new FormData();
-    formData.append('file', file);
-
-    try {
-        // Use V2 endpoint to ensure we hit the updated Node route
-        const response = await fetch('/api/v2/upload', {
-            method: 'POST',
-            body: formData,
-        });
-
-        if (response.ok) {
-            addLog(`上传成功: ${file.name}`, 'success');
-            await fetchAssets(); // Refresh list
-        } else {
-            // Handle 405 Method Not Allowed specifically
-            if (response.status === 405) {
-                addLog(`上传失败 (405): 静态模式冲突。请务必在 Zeabur 设置中清空 "Output Directory" (输出目录) 选项。`, 'error');
-            } else {
-                try {
-                    const errData = await response.json();
-                    addLog(`上传失败: ${errData.message || '服务器内部错误'}`, 'error');
-                } catch (e) {
-                    addLog(`上传失败: 服务器返回状态码 ${response.status}`, 'error');
-                }
-            }
-        }
-    } catch (error) {
-        addLog(`上传出错: 网络连接失败`, 'error');
-    } finally {
-        setIsUploading(false);
-        if (addFileRef.current) addFileRef.current.value = '';
-    }
-  };
-
-  const handleRenameAsset = async (oldName: string, newName: string) => {
-      if (oldName === newName) return true;
-
-      try {
-          const response = await fetch('/api/rename', {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ oldName, newName })
-          });
-          
-          if (response.ok) {
-              addLog(`重命名成功: ${oldName} -> ${newName}`, 'success');
-              fetchAssets(); // Refresh list to update paths
-              return true;
-          } else {
-              const data = await response.json();
-              addLog(`重命名失败: ${data.message}`, 'error');
-              return false;
-          }
-      } catch (error) {
-          addLog('重命名出错: 网络请求失败', 'error');
-          return false;
-      }
-  };
-
-  const handleDeleteAsset = async (filename: string) => {
-    try {
-        const response = await fetch(`/api/delete/${filename}`, {
-            method: 'DELETE',
-        });
-        
-        if (response.ok) {
-            addLog(`已删除文件: ${filename}`, 'warning');
-            fetchAssets(); // Refresh list
-        } else {
-            const data = await response.json();
-            addLog(`删除失败: ${data.message || filename}`, 'error');
-        }
-    } catch (error) {
-        addLog(`删除出错: 网络请求失败`, 'error');
-    }
-  };
-
   const reloadAllImages = () => {
      fetchAssets();
      addLog('已刷新资源列表', 'info');
@@ -239,7 +150,7 @@ function App() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
               </svg>
             </div>
-            <h1 className="text-xl font-bold tracking-tight text-gray-900">ServerGuard <span className="text-gray-400 font-normal">资源卫士 v2.3</span></h1>
+            <h1 className="text-xl font-bold tracking-tight text-gray-900">ServerGuard <span className="text-gray-400 font-normal">GitHub 同步版</span></h1>
           </div>
           
           <div className="flex items-center gap-3">
@@ -259,20 +170,18 @@ function App() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
         
         {/* Important Notice */}
-        <div className="bg-purple-50 border border-purple-200 rounded-xl p-4 flex flex-col md:flex-row gap-3 items-start">
-             <div className="text-purple-500 mt-1 shrink-0">
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex flex-col md:flex-row gap-3 items-start">
+             <div className="text-blue-500 mt-1 shrink-0">
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
              </div>
              <div className="flex-1">
-               <h4 className="font-bold text-purple-900 text-sm">使用说明</h4>
-               <ul className="mt-1 text-sm text-purple-800 leading-relaxed list-disc list-inside space-y-1">
-                 <li>点击下方的 <strong>“上传文件”</strong> 按钮上传图片。</li>
-                 <li>图片将保存到服务器的 <code>/public</code> 目录，并立即生效。</li>
-                 <li>
-                   <strong>重要配置:</strong> 部署成功后，请在 Zeabur 的 <strong>Settings (设置) &gt; Storage (硬盘)</strong> 中，添加一个挂载点到 <code>/app/public</code>，否则重启后图片会丢失。
-                 </li>
+               <h4 className="font-bold text-blue-900 text-sm">Git 托管模式已开启</h4>
+               <ul className="mt-1 text-sm text-blue-800 leading-relaxed list-disc list-inside space-y-1">
+                 <li>当前为<strong>只读模式</strong>。请将图片直接放入本地代码的 <code>/public</code> 文件夹。</li>
+                 <li>执行 <code>git push</code> 推送代码后，Zeabur 会自动部署并更新此页面。</li>
+                 <li>在此页面复制的图片链接是永久有效的。</li>
                </ul>
              </div>
         </div>
@@ -293,38 +202,6 @@ function App() {
             <h2 className="text-2xl font-bold text-gray-900">
               服务器资源 ({assets.length})
             </h2>
-            <div className="flex gap-2">
-               <button 
-                  onClick={() => addFileRef.current?.click()}
-                  disabled={isUploading}
-                  className={`flex items-center gap-2 bg-gray-900 hover:bg-black text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm active:scale-95 ${isUploading ? 'opacity-70 cursor-wait' : ''}`}
-               >
-                 {isUploading ? (
-                    <>
-                        <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        上传中...
-                    </>
-                 ) : (
-                    <>
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                        </svg>
-                        上传文件
-                    </>
-                 )}
-               </button>
-               {/* Hidden file input for adding new assets */}
-               <input 
-                  type="file" 
-                  ref={addFileRef} 
-                  onChange={handleNewFileSelect} 
-                  className="hidden" 
-                  accept="image/png,image/jpeg,image/gif,image/webp"
-               />
-            </div>
           </div>
           
           {assets.length === 0 ? (
@@ -335,7 +212,7 @@ function App() {
                     </svg>
                  </div>
                  <h3 className="text-lg font-medium text-gray-900">暂无资源</h3>
-                 <p className="text-gray-500 text-sm mt-1">服务器 public 目录为空，请点击上方按钮上传图片。</p>
+                 <p className="text-gray-500 text-sm mt-1">请将图片添加到 GitHub 仓库的 public 文件夹中并推送。</p>
              </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -343,8 +220,7 @@ function App() {
                 <AssetCard 
                     key={asset.id} 
                     asset={asset} 
-                    onRename={handleRenameAsset}
-                    onDelete={handleDeleteAsset}
+                    onRename={async () => false}
                 />
                 ))}
             </div>
@@ -364,7 +240,7 @@ function App() {
             </code>
           </div>
           <div className="text-xs text-gray-400">
-             Node.js Powered • ServerGuard v2.3
+             Node.js Powered • ServerGuard v2.4 (Git Mode)
           </div>
         </div>
       </footer>
