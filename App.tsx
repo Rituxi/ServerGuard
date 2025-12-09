@@ -130,12 +130,17 @@ function App() {
             addLog(`上传成功: ${file.name}`, 'success');
             await fetchAssets(); // Refresh list
         } else {
-            // Try to parse detailed error message
-            try {
-                const errData = await response.json();
-                addLog(`上传失败: ${errData.message || '服务器内部错误'}`, 'error');
-            } catch (e) {
-                addLog(`上传失败: 服务器返回状态码 ${response.status}`, 'error');
+            // Handle 405 Method Not Allowed specifically for Zeabur Static misconfiguration
+            if (response.status === 405) {
+                addLog(`上传失败: 部署模式错误 (405)。Zeabur 可能将其误判为静态网站。请检查 zbpack.json 是否生效。`, 'error');
+            } else {
+                // Try to parse detailed error message
+                try {
+                    const errData = await response.json();
+                    addLog(`上传失败: ${errData.message || '服务器内部错误'}`, 'error');
+                } catch (e) {
+                    addLog(`上传失败: 服务器返回状态码 ${response.status}`, 'error');
+                }
             }
         }
     } catch (error) {
