@@ -1,0 +1,5 @@
+{
+  "name": "ServerGuard Host",
+  "description": "用于托管静态资源并维持服务器活跃以防止平台休眠的仪表盘工具。",
+  "requestFramePermissions": []
+}
