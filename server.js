@@ -70,6 +70,11 @@ const upload = multer({
 
 // --- API ROUTES ---
 
+// API: Root Check
+app.get('/api', (req, res) => {
+  res.send('ServerGuard API is running');
+});
+
 // API: Health Check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', runtime: 'node', timestamp: Date.now() });
@@ -193,5 +198,9 @@ app.get('*', (req, res) => {
 });
 
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`ServerGuard Node.js Server running on port ${PORT}`);
+  console.log('----------------------------------------------------');
+  console.log(`ServerGuard Node.js Server STARTUP SUCCESSFUL`);
+  console.log(`Listening on port ${PORT}`);
+  console.log('If you see this log, the Node.js backend is active.');
+  console.log('----------------------------------------------------');
 });

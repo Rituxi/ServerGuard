@@ -42,6 +42,14 @@ function App() {
   const fetchAssets = useCallback(async () => {
     try {
       const response = await fetch('/api/assets?t=' + Date.now());
+      
+      // Strict check: If server returns HTML, it means we are in Static Mode (Nginx serving index.html for 404s)
+      const contentType = response.headers.get("content-type");
+      if (contentType && contentType.includes("text/html")) {
+          console.warn("Received HTML instead of JSON. Static mode detected.");
+          return; // Fail silently or handle strictly
+      }
+
       if (response.ok) {
         const files = await response.json();
         const mappedAssets: HostedAsset[] = files.map((f: any) => {
@@ -85,7 +93,7 @@ function App() {
       throw new Error("Invalid response");
 
     } catch (e) {
-      addLog(`连接警告：后端服务未响应。这可能是静态部署模式导致的。`, 'warning');
+      addLog(`连接警告：后端服务未响应。请检查 Zeabur 设置中的 "Output Directory" 是否已清空。`, 'warning');
     }
   }, [addLog]);
 
@@ -97,14 +105,17 @@ function App() {
         // Initial health check
         fetch('/api/health?init=' + Date.now())
             .then(res => {
-                if (!res.ok) throw new Error("Status not ok");
+                const contentType = res.headers.get("content-type");
+                if (!res.ok || !contentType?.includes("application/json")) {
+                    throw new Error("Not a JSON response");
+                }
                 return res.json();
             })
             .then(() => {
                  addLog('后端服务：连接成功 (Node.js)', 'success');
             })
             .catch(() => {
-                 addLog('后端服务：连接异常 - 似乎运行在纯静态模式，API 不可用', 'error');
+                 addLog('环境检测：API 不可用。Zeabur 可能正在以静态模式运行，请清空 "Output Directory" 设置。', 'error');
             });
         
         if (keepAliveIntervalRef.current) clearInterval(keepAliveIntervalRef.current);
@@ -151,7 +162,7 @@ function App() {
         } else {
             // Handle 405 Method Not Allowed specifically
             if (response.status === 405) {
-                addLog(`上传失败 (405): 请求被拦截。请确认 Zeabur 的 "zbpack.json" 已生效，且未配置为纯静态模式。`, 'error');
+                addLog(`上传失败 (405): 静态模式冲突。请务必在 Zeabur 设置中清空 "Output Directory" (输出目录) 选项。`, 'error');
             } else {
                 try {
                     const errData = await response.json();
@@ -228,7 +239,7 @@ function App() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
               </svg>
             </div>
-            <h1 className="text-xl font-bold tracking-tight text-gray-900">ServerGuard <span className="text-gray-400 font-normal">资源卫士 v2.2</span></h1>
+            <h1 className="text-xl font-bold tracking-tight text-gray-900">ServerGuard <span className="text-gray-400 font-normal">资源卫士 v2.3</span></h1>
           </div>
           
           <div className="flex items-center gap-3">
@@ -353,7 +364,7 @@ function App() {
             </code>
           </div>
           <div className="text-xs text-gray-400">
-             Node.js Powered • ServerGuard v2.2
+             Node.js Powered • ServerGuard v2.3
           </div>
         </div>
       </footer>
