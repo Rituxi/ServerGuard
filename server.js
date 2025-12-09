@@ -11,24 +11,17 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Essential for Zeabur/PaaS to correctly identify protocol (http/https)
 app.enable('trust proxy');
-
 app.use(cors());
-// Explicitly handle OPTIONS for all routes to prevent 405 on preflight
 app.options('*', cors());
-
 app.use(express.json());
 
-// Log every request to help debug routing issues
 app.use((req, res, next) => {
-  // Filter out noisy favicon requests
   if (req.url === '/favicon.ico') return next();
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.url} - IP: ${req.ip}`);
   next();
 });
 
-// Ensure public directory exists immediately on startup
 const publicDir = path.join(__dirname, 'public');
 console.log(`System Public Directory: ${publicDir}`);
 
@@ -43,7 +36,6 @@ try {
   console.error('CRITICAL ERROR: Failed to create public directory:', err);
 }
 
-// Configure storage for Multer
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     if (!fs.existsSync(publicDir)) {
@@ -71,18 +63,14 @@ const upload = multer({
 });
 
 // --- API ROUTES ---
-
-// API: Root Check
 app.get('/api', (req, res) => {
   res.send('ServerGuard API is running');
 });
 
-// API: Health Check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', runtime: 'node', timestamp: Date.now() });
 });
 
-// API: List assets
 app.get('/api/assets', (req, res) => {
   if (!fs.existsSync(publicDir)) {
     return res.json([]);
@@ -115,7 +103,6 @@ app.get('/api/assets', (req, res) => {
   });
 });
 
-// API: Upload (v2 to bypass cache/routing issues)
 app.post('/api/v2/upload', (req, res) => {
   const uploadSingle = upload.single('file');
 
@@ -141,7 +128,6 @@ app.post('/api/v2/upload', (req, res) => {
   });
 });
 
-// API: Rename
 app.put('/api/rename', (req, res) => {
   const { oldName, newName } = req.body;
   if (!oldName || !newName) return res.status(400).send({ message: 'Missing filename.' });
@@ -165,7 +151,6 @@ app.put('/api/rename', (req, res) => {
   });
 });
 
-// API: Delete
 app.delete('/api/delete/:filename', (req, res) => {
   const filePath = path.join(publicDir, req.params.filename);
   if (fs.existsSync(filePath)) {
@@ -182,13 +167,10 @@ app.delete('/api/delete/:filename', (req, res) => {
 });
 
 // --- STATIC FILES ---
-// Serve uploaded images
 app.use(express.static(publicDir));
 
-// Serve React App
 const distDir = path.join(__dirname, 'dist');
 
-// Wait loop for dist directory (since build happens in start script)
 const waitForDist = async () => {
   let retries = 0;
   while (!fs.existsSync(distDir) && retries < 5) {
@@ -200,21 +182,22 @@ const waitForDist = async () => {
 
 waitForDist().then(() => {
     console.log(`Serving static app from: ${distDir}`);
-    // Verify dist folder exists
     if (fs.existsSync(distDir)) {
         const files = fs.readdirSync(distDir);
         console.log(`Contents of dist: ${files.join(', ')}`);
     } else {
-        console.error(`CRITICAL WARNING: dist folder missing after build attempt.`);
+        console.error(`CRITICAL WARNING: dist folder missing.`);
     }
 });
 
 app.use(express.static(distDir));
 
-// SPA Fallback: Send index.html for any other requests
-// This must be LAST
+// SPA Fallback: Point to the NEW app.html
 app.get('*', (req, res) => {
-  if (fs.existsSync(path.join(distDir, 'index.html'))) {
+  if (fs.existsSync(path.join(distDir, 'app.html'))) {
+     res.sendFile(path.join(distDir, 'app.html'));
+  } else if (fs.existsSync(path.join(distDir, 'index.html'))) {
+     // Fallback just in case
      res.sendFile(path.join(distDir, 'index.html'));
   } else {
      res.status(404).send('ServerGuard App is starting up... Please refresh in a few seconds.');

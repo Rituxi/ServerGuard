@@ -1,6 +1,6 @@
 {
   "name": "serverguard-host",
-  "version": "2.3.0",
+  "version": "2.4.0",
   "private": true,
   "type": "module",
   "main": "server.js",
@@ -8,7 +8,7 @@
     "node": ">=18.0.0"
   },
   "scripts": {
-    "start": "vite build && NODE_ENV=production node server.js"
+    "start": "node build-runner.js && NODE_ENV=production node server.js"
   },
   "dependencies": {
     "cors": "^2.8.5",
