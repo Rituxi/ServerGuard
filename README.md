@@ -1,20 +1,52 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# ServerGuard 图床与保活服务
 
-# Run and deploy your AI Studio app
+这是一个基于 Node.js (Express + React) 的轻量级应用程序，专为云平台（如 Zeabur）设计。
 
-This contains everything you need to run your app locally.
+**核心功能：**
+1.  **静态资源托管**：提供一个简单的网页界面上传图片，生成永久访问链接（用于微信小程序等）。
+2.  **防休眠机制**：内置心跳检测，防止云服务因无流量而自动休眠。
 
-View your app in AI Studio: https://ai.studio/apps/drive/13mYHNzJlbzUK79B895lfYqoEaenEqvXO
+---
 
-## Run Locally
+## 🚀 部署指南 (Zeabur)
 
-**Prerequisites:**  Node.js
+由于云容器重启后会重置文件系统，为了**永久保存**您上传的图片，**必须**配置挂载卷。
 
+### 1. 部署代码
+将代码推送到 GitHub 或上传到 Zeabur 进行部署。
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+### 2. ⚠️ 关键步骤：配置持久化存储 (Volume)
+部署成功后，请立即执行以下操作，否则重启后图片会丢失：
+
+1. 进入 Zeabur 控制台 -> 点击您的 **ServerGuard** 服务。
+2. 点击顶部菜单的 **设置 (Settings)** -> **硬盘 (Storage)**。
+3. 点击 **添加路径 (Add Path)**。
+4. 填写以下信息：
+   - **挂载名称**：任意填写（例如 `assets-data`）
+   - **挂载路径**：必须精确填写 **`/app/public`**
+5. 点击 **挂载硬盘**。
+
+*服务会自动重启，重启完成后，您上传的图片将永久保存。*
+
+---
+
+## 📖 使用说明
+
+1. 打开部署后的网页链接。
+2. 点击右上角的 **"上传文件"** 按钮。
+3. 选择您的图片（如 `cover-card.png`）。
+4. 上传成功后，图片地址即为：`https://您的域名.zeabur.app/cover-card.png`。
+5. 将此链接复制到您的小程序代码中即可。
+
+## 🛠 本地开发
+
+```bash
+# 安装依赖
+npm install
+
+# 启动开发服务器 (前后端联调)
+npm run dev
+
+# 仅启动后端 (生产环境模式)
+npm start
+```

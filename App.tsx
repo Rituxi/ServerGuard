@@ -5,6 +5,14 @@ import { StatusIndicator } from './components/StatusIndicator';
 import { PING_INTERVAL_MS } from './constants';
 import { AppStatus, HostedAsset, SystemLog } from './types';
 
+// Configuration for mapping filenames to Chinese display names
+const FILENAME_MAPPING: Record<string, string> = {
+    'cover-card.png': '应用封面',
+    'donate-qrcode1.png': '赞赏码',
+    'avatar.png': '用户头像',
+    'banner.png': '横幅广告'
+};
+
 function App() {
   const [status, setStatus] = useState<AppStatus>(AppStatus.STOPPED);
   const [startTime, setStartTime] = useState<number | null>(null);
@@ -36,18 +44,24 @@ function App() {
       const response = await fetch('/api/assets');
       if (response.ok) {
         const files = await response.json();
-        const mappedAssets: HostedAsset[] = files.map((f: any) => ({
-            id: f.name,
-            name: f.name,
-            description: `对应文件: /${f.name}`,
-            url: f.url,
-            placeholderColor: 'bg-indigo-400'
-        }));
+        const mappedAssets: HostedAsset[] = files.map((f: any) => {
+            // Check if we have a Chinese name mapping for this file
+            const displayName = FILENAME_MAPPING[f.name] || f.name;
+            
+            return {
+                id: f.name,
+                name: displayName,       // Display Name (Chinese if mapped)
+                originalName: f.name,    // Actual filename
+                description: `对应文件: /${f.name}`,
+                url: f.url,
+                size: f.size,            // File size from server
+                placeholderColor: 'bg-indigo-400'
+            };
+        });
         setAssets(mappedAssets);
       }
     } catch (error) {
       console.error('Failed to fetch assets', error);
-      // Don't log error to console to avoid spamming
     }
   }, []);
 
@@ -126,6 +140,31 @@ function App() {
     }
   };
 
+  const handleRenameAsset = async (oldName: string, newName: string) => {
+      if (oldName === newName) return true;
+
+      try {
+          const response = await fetch('/api/rename', {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ oldName, newName })
+          });
+          
+          if (response.ok) {
+              addLog(`重命名成功: ${oldName} -> ${newName}`, 'success');
+              fetchAssets(); // Refresh list to update paths
+              return true;
+          } else {
+              const data = await response.json();
+              addLog(`重命名失败: ${data.message}`, 'error');
+              return false;
+          }
+      } catch (error) {
+          addLog('重命名出错: 网络请求失败', 'error');
+          return false;
+      }
+  };
+
   const handleDeleteAsset = async (filename: string) => {
     try {
         const response = await fetch(`/api/delete/${filename}`, {
@@ -159,7 +198,7 @@ function App() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
               </svg>
             </div>
-            <h1 className="text-xl font-bold tracking-tight text-gray-900">ServerGuard <span className="text-gray-400 font-normal">Backend v2.0</span></h1>
+            <h1 className="text-xl font-bold tracking-tight text-gray-900">ServerGuard <span className="text-gray-400 font-normal">资源卫士 v2.0</span></h1>
           </div>
           
           <div className="flex items-center gap-3">
@@ -263,7 +302,7 @@ function App() {
                 <AssetCard 
                     key={asset.id} 
                     asset={asset} 
-                    onUpdate={() => {}} // Not used in backend mode
+                    onRename={handleRenameAsset}
                     onDelete={handleDeleteAsset}
                 />
                 ))}

@@ -7,11 +7,13 @@ export interface SystemLog {
 
 export interface HostedAsset {
   id: string;
-  name: string;
+  name: string;         // The display name (Chinese)
+  originalName: string; // The actual filename on disk
   description: string;
   url: string; 
+  size?: number;        // File size in bytes
   placeholderColor: string;
-  isCustom?: boolean; // Kept for UI logic, though backend treats all same
+  isCustom?: boolean; 
 }
 
 export enum AppStatus {

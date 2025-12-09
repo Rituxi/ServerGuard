@@ -10,6 +10,9 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Enable JSON body parsing for API requests (e.g. rename)
+app.use(express.json());
+
 // Configure storage for Multer
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
@@ -53,9 +56,19 @@ app.get('/api/assets', (req, res) => {
     const fileInfos = files
       .filter(file => /\.(png|jpe?g|gif|webp)$/i.test(file))
       .map(file => {
+        const filePath = path.join(directoryPath, file);
+        let size = 0;
+        try {
+            const stats = fs.statSync(filePath);
+            size = stats.size;
+        } catch (e) {
+            console.error('Error reading file stats', e);
+        }
+
         return {
           name: file,
           url: `/${file}`,
+          size: size // Add file size in bytes
         };
       });
 
@@ -72,6 +85,37 @@ app.post('/api/upload', upload.single('file'), (req, res) => {
     message: 'File uploaded successfully', 
     filename: req.file.filename,
     url: `/${req.file.filename}`
+  });
+});
+
+// API: Rename a file
+app.put('/api/rename', (req, res) => {
+  const { oldName, newName } = req.body;
+  if (!oldName || !newName) {
+    return res.status(400).send({ message: 'Missing filename.' });
+  }
+
+  const oldPath = path.join(__dirname, 'public', oldName);
+  const newPath = path.join(__dirname, 'public', newName);
+
+  // Simple validation
+  if (newName.includes('..') || newName.includes('/') || newName.includes('\\')) {
+     return res.status(400).send({ message: 'Invalid filename.' });
+  }
+
+  if (!fs.existsSync(oldPath)) {
+    return res.status(404).send({ message: 'File not found.' });
+  }
+  
+  if (fs.existsSync(newPath)) {
+      return res.status(409).send({ message: 'File with that name already exists.' });
+  }
+
+  fs.rename(oldPath, newPath, (err) => {
+    if (err) {
+      return res.status(500).send({ message: 'Could not rename file.' });
+    }
+    res.send({ message: 'File renamed successfully.', newName, url: `/${newName}` });
   });
 });
 
