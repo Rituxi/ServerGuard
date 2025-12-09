@@ -14,6 +14,12 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
+// Log every request to verify if traffic hits Node.js or gets blocked by Zeabur Static (Caddy)
+app.use((req, res, next) => {
+  console.log(`[REQUEST] ${req.method} ${req.url}`);
+  next();
+});
+
 // Ensure public directory exists immediately on startup
 const publicDir = path.join(__dirname, 'public');
 console.log(`System Public Directory: ${publicDir}`);
@@ -169,6 +175,6 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
 });
