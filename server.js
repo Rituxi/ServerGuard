@@ -22,6 +22,8 @@ app.use(express.json());
 
 // Log every request to help debug routing issues
 app.use((req, res, next) => {
+  // Filter out noisy favicon requests
+  if (req.url === '/favicon.ico') return next();
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.url} - IP: ${req.ip}`);
   next();
 });
@@ -185,23 +187,27 @@ app.use(express.static(publicDir));
 
 // Serve React App
 const distDir = path.join(__dirname, 'dist');
-console.log(`Serving static app from: ${distDir}`);
 
-// Verify dist folder exists (Debug logging)
-try {
+// Wait loop for dist directory (since build happens in start script)
+const waitForDist = async () => {
+  let retries = 0;
+  while (!fs.existsSync(distDir) && retries < 5) {
+    console.log('Waiting for dist directory to be created...');
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    retries++;
+  }
+};
+
+waitForDist().then(() => {
+    console.log(`Serving static app from: ${distDir}`);
+    // Verify dist folder exists
     if (fs.existsSync(distDir)) {
         const files = fs.readdirSync(distDir);
         console.log(`Contents of dist: ${files.join(', ')}`);
-        if (!files.includes('index.html')) {
-            console.error('CRITICAL WARNING: index.html not found in dist folder!');
-        }
     } else {
-        console.error(`CRITICAL WARNING: dist folder does not exist at ${distDir}`);
-        console.error('Make sure "vite build" ran successfully during postinstall.');
+        console.error(`CRITICAL WARNING: dist folder missing after build attempt.`);
     }
-} catch(e) {
-    console.error('Error checking dist folder:', e);
-}
+});
 
 app.use(express.static(distDir));
 
@@ -211,7 +217,7 @@ app.get('*', (req, res) => {
   if (fs.existsSync(path.join(distDir, 'index.html'))) {
      res.sendFile(path.join(distDir, 'index.html'));
   } else {
-     res.status(404).send('ServerGuard App not built. Please check build logs.');
+     res.status(404).send('ServerGuard App is starting up... Please refresh in a few seconds.');
   }
 });
 
@@ -219,6 +225,5 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log('----------------------------------------------------');
   console.log(`ServerGuard Node.js Server STARTUP SUCCESSFUL`);
   console.log(`Listening on port ${PORT}`);
-  console.log('If you see this log, the Node.js backend is active.');
   console.log('----------------------------------------------------');
 });
