@@ -130,7 +130,13 @@ function App() {
             addLog(`上传成功: ${file.name}`, 'success');
             await fetchAssets(); // Refresh list
         } else {
-            addLog(`上传失败: 服务器返回错误`, 'error');
+            // Try to parse detailed error message
+            try {
+                const errData = await response.json();
+                addLog(`上传失败: ${errData.message || '服务器内部错误'}`, 'error');
+            } catch (e) {
+                addLog(`上传失败: 服务器返回状态码 ${response.status}`, 'error');
+            }
         }
     } catch (error) {
         addLog(`上传出错: 网络连接失败`, 'error');
@@ -175,7 +181,8 @@ function App() {
             addLog(`已删除文件: ${filename}`, 'warning');
             fetchAssets(); // Refresh list
         } else {
-            addLog(`删除失败: ${filename}`, 'error');
+            const data = await response.json();
+            addLog(`删除失败: ${data.message || filename}`, 'error');
         }
     } catch (error) {
         addLog(`删除出错: 网络请求失败`, 'error');

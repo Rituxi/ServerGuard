@@ -3,6 +3,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
+import cors from 'cors';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -10,65 +11,84 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Enable JSON body parsing for API requests (e.g. rename)
+app.use(cors());
 app.use(express.json());
+
+// Ensure public directory exists immediately on startup
+const publicDir = path.join(__dirname, 'public');
+console.log(`System Public Directory: ${publicDir}`);
+
+try {
+  if (!fs.existsSync(publicDir)) {
+    fs.mkdirSync(publicDir, { recursive: true });
+    console.log('Created public directory successfully.');
+  } else {
+    console.log('Public directory already exists.');
+  }
+} catch (err) {
+  console.error('CRITICAL ERROR: Failed to create public directory:', err);
+}
 
 // Configure storage for Multer
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    const uploadPath = path.join(__dirname, 'public');
-    // Ensure public directory exists
-    if (!fs.existsSync(uploadPath)) {
-      fs.mkdirSync(uploadPath, { recursive: true });
+    // Re-check directory existence before each upload
+    if (!fs.existsSync(publicDir)) {
+      try {
+        fs.mkdirSync(publicDir, { recursive: true });
+      } catch (err) {
+        return cb(err);
+      }
     }
-    cb(null, uploadPath);
+    cb(null, publicDir);
   },
   filename: function (req, file, cb) {
-    // Keep original filename to prevent renaming
-    // Decode URI component to handle Chinese characters correctly
-    const originalName = Buffer.from(file.originalname, 'latin1').toString('utf8');
-    cb(null, originalName);
+    try {
+      // Decode filename for Chinese character support
+      // Fallback to originalname if decoding fails/isn't needed
+      const originalName = Buffer.from(file.originalname, 'latin1').toString('utf8');
+      cb(null, originalName);
+    } catch (e) {
+      cb(null, file.originalname);
+    }
   }
 });
 
-const upload = multer({ storage: storage });
+const upload = multer({ 
+  storage: storage,
+  limits: { fileSize: 10 * 1024 * 1024 } // Limit to 10MB
+});
 
-// Serve static files from 'public' directory (images)
-app.use(express.static(path.join(__dirname, 'public')));
-
-// Serve static files from 'dist' directory (React build)
+// Serve static files
+app.use(express.static(publicDir));
 app.use(express.static(path.join(__dirname, 'dist')));
 
-// API: List all assets in public folder
+// API: List all assets
 app.get('/api/assets', (req, res) => {
-  const directoryPath = path.join(__dirname, 'public');
-  
-  if (!fs.existsSync(directoryPath)) {
+  if (!fs.existsSync(publicDir)) {
     return res.json([]);
   }
 
-  fs.readdir(directoryPath, (err, files) => {
+  fs.readdir(publicDir, (err, files) => {
     if (err) {
+      console.error('Error reading directory:', err);
       return res.status(500).send({ message: 'Unable to scan files!' });
     }
 
-    // Filter for images only
     const fileInfos = files
       .filter(file => /\.(png|jpe?g|gif|webp)$/i.test(file))
       .map(file => {
-        const filePath = path.join(directoryPath, file);
+        const filePath = path.join(publicDir, file);
         let size = 0;
         try {
             const stats = fs.statSync(filePath);
             size = stats.size;
-        } catch (e) {
-            console.error('Error reading file stats', e);
-        }
+        } catch (e) {}
 
         return {
           name: file,
           url: `/${file}`,
-          size: size // Add file size in bytes
+          size: size
         };
       });
 
@@ -76,44 +96,54 @@ app.get('/api/assets', (req, res) => {
   });
 });
 
-// API: Upload a file
-app.post('/api/upload', upload.single('file'), (req, res) => {
-  if (!req.file) {
-    return res.status(400).send('No file uploaded.');
-  }
-  res.send({ 
-    message: 'File uploaded successfully', 
-    filename: req.file.filename,
-    url: `/${req.file.filename}`
+// API: Upload a file (With detailed error handling)
+app.post('/api/upload', (req, res) => {
+  const uploadSingle = upload.single('file');
+
+  uploadSingle(req, res, function (err) {
+    if (err instanceof multer.MulterError) {
+      // A Multer error occurred when uploading.
+      console.error('Multer Upload Error:', err);
+      return res.status(500).json({ message: `Upload Error: ${err.message}` });
+    } else if (err) {
+      // An unknown error occurred when uploading.
+      console.error('Unknown Upload Error:', err);
+      return res.status(500).json({ message: `System Error: ${err.message}` });
+    }
+
+    // Everything went fine.
+    if (!req.file) {
+      return res.status(400).json({ message: 'No file uploaded.' });
+    }
+
+    console.log(`File uploaded: ${req.file.filename} (${req.file.size} bytes)`);
+    res.send({ 
+      message: 'File uploaded successfully', 
+      filename: req.file.filename,
+      url: `/${req.file.filename}`
+    });
   });
 });
 
 // API: Rename a file
 app.put('/api/rename', (req, res) => {
   const { oldName, newName } = req.body;
-  if (!oldName || !newName) {
-    return res.status(400).send({ message: 'Missing filename.' });
-  }
+  if (!oldName || !newName) return res.status(400).send({ message: 'Missing filename.' });
 
-  const oldPath = path.join(__dirname, 'public', oldName);
-  const newPath = path.join(__dirname, 'public', newName);
+  const oldPath = path.join(publicDir, oldName);
+  const newPath = path.join(publicDir, newName);
 
-  // Simple validation
   if (newName.includes('..') || newName.includes('/') || newName.includes('\\')) {
      return res.status(400).send({ message: 'Invalid filename.' });
   }
 
-  if (!fs.existsSync(oldPath)) {
-    return res.status(404).send({ message: 'File not found.' });
-  }
-  
-  if (fs.existsSync(newPath)) {
-      return res.status(409).send({ message: 'File with that name already exists.' });
-  }
+  if (!fs.existsSync(oldPath)) return res.status(404).send({ message: 'File not found.' });
+  if (fs.existsSync(newPath)) return res.status(409).send({ message: 'File already exists.' });
 
   fs.rename(oldPath, newPath, (err) => {
     if (err) {
-      return res.status(500).send({ message: 'Could not rename file.' });
+      console.error('Rename Error:', err);
+      return res.status(500).send({ message: `Rename failed: ${err.message}` });
     }
     res.send({ message: 'File renamed successfully.', newName, url: `/${newName}` });
   });
@@ -121,13 +151,12 @@ app.put('/api/rename', (req, res) => {
 
 // API: Delete a file
 app.delete('/api/delete/:filename', (req, res) => {
-  const filename = req.params.filename;
-  const filePath = path.join(__dirname, 'public', filename);
-
+  const filePath = path.join(publicDir, req.params.filename);
   if (fs.existsSync(filePath)) {
     fs.unlink(filePath, (err) => {
       if (err) {
-        return res.status(500).send({ message: 'Could not delete file.' });
+        console.error('Delete Error:', err);
+        return res.status(500).send({ message: `Delete failed: ${err.message}` });
       }
       res.send({ message: 'File deleted successfully.' });
     });
@@ -136,12 +165,10 @@ app.delete('/api/delete/:filename', (req, res) => {
   }
 });
 
-// Handle React routing, return all requests to React app
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
 app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-  console.log(`Serving files from ${path.join(__dirname, 'public')}`);
+  console.log(`Server running on port ${PORT}`);
 });
