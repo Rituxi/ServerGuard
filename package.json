@@ -9,8 +9,7 @@
   },
   "scripts": {
     "dev": "vite",
-    "build:client": "vite build",
-    "postinstall": "npm run build:client",
+    "postinstall": "vite build",
     "start": "NODE_ENV=production node server.js"
   },
   "dependencies": {

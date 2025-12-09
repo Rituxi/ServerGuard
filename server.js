@@ -185,6 +185,24 @@ app.use(express.static(publicDir));
 
 // Serve React App
 const distDir = path.join(__dirname, 'dist');
+console.log(`Serving static app from: ${distDir}`);
+
+// Verify dist folder exists (Debug logging)
+try {
+    if (fs.existsSync(distDir)) {
+        const files = fs.readdirSync(distDir);
+        console.log(`Contents of dist: ${files.join(', ')}`);
+        if (!files.includes('index.html')) {
+            console.error('CRITICAL WARNING: index.html not found in dist folder!');
+        }
+    } else {
+        console.error(`CRITICAL WARNING: dist folder does not exist at ${distDir}`);
+        console.error('Make sure "vite build" ran successfully during postinstall.');
+    }
+} catch(e) {
+    console.error('Error checking dist folder:', e);
+}
+
 app.use(express.static(distDir));
 
 // SPA Fallback: Send index.html for any other requests
@@ -193,7 +211,7 @@ app.get('*', (req, res) => {
   if (fs.existsSync(path.join(distDir, 'index.html'))) {
      res.sendFile(path.join(distDir, 'index.html'));
   } else {
-     res.status(404).send('App not built. Please run npm run build.');
+     res.status(404).send('ServerGuard App not built. Please check build logs.');
   }
 });
 
