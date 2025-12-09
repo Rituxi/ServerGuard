@@ -11,12 +11,18 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Essential for Zeabur/PaaS to correctly identify protocol (http/https)
+app.enable('trust proxy');
+
 app.use(cors());
+// Explicitly handle OPTIONS for all routes to prevent 405 on preflight
+app.options('*', cors());
+
 app.use(express.json());
 
-// Log every request to verify if traffic hits Node.js or gets blocked by Zeabur Static (Caddy)
+// Log every request to help debug routing issues
 app.use((req, res, next) => {
-  console.log(`[REQUEST] ${req.method} ${req.url}`);
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url} - IP: ${req.ip}`);
   next();
 });
 
@@ -38,7 +44,6 @@ try {
 // Configure storage for Multer
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    // Re-check directory existence before each upload
     if (!fs.existsSync(publicDir)) {
       try {
         fs.mkdirSync(publicDir, { recursive: true });
@@ -50,8 +55,6 @@ const storage = multer.diskStorage({
   },
   filename: function (req, file, cb) {
     try {
-      // Decode filename for Chinese character support
-      // Fallback to originalname if decoding fails/isn't needed
       const originalName = Buffer.from(file.originalname, 'latin1').toString('utf8');
       cb(null, originalName);
     } catch (e) {
@@ -62,14 +65,17 @@ const storage = multer.diskStorage({
 
 const upload = multer({ 
   storage: storage,
-  limits: { fileSize: 10 * 1024 * 1024 } // Limit to 10MB
+  limits: { fileSize: 10 * 1024 * 1024 } 
 });
 
-// Serve static files
-app.use(express.static(publicDir));
-app.use(express.static(path.join(__dirname, 'dist')));
+// --- API ROUTES ---
 
-// API: List all assets
+// API: Health Check
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', runtime: 'node', timestamp: Date.now() });
+});
+
+// API: List assets
 app.get('/api/assets', (req, res) => {
   if (!fs.existsSync(publicDir)) {
     return res.json([]);
@@ -102,22 +108,19 @@ app.get('/api/assets', (req, res) => {
   });
 });
 
-// API: Upload a file (With detailed error handling)
-app.post('/api/upload', (req, res) => {
+// API: Upload (v2 to bypass cache/routing issues)
+app.post('/api/v2/upload', (req, res) => {
   const uploadSingle = upload.single('file');
 
   uploadSingle(req, res, function (err) {
     if (err instanceof multer.MulterError) {
-      // A Multer error occurred when uploading.
       console.error('Multer Upload Error:', err);
       return res.status(500).json({ message: `Upload Error: ${err.message}` });
     } else if (err) {
-      // An unknown error occurred when uploading.
       console.error('Unknown Upload Error:', err);
       return res.status(500).json({ message: `System Error: ${err.message}` });
     }
 
-    // Everything went fine.
     if (!req.file) {
       return res.status(400).json({ message: 'No file uploaded.' });
     }
@@ -131,7 +134,7 @@ app.post('/api/upload', (req, res) => {
   });
 });
 
-// API: Rename a file
+// API: Rename
 app.put('/api/rename', (req, res) => {
   const { oldName, newName } = req.body;
   if (!oldName || !newName) return res.status(400).send({ message: 'Missing filename.' });
@@ -155,7 +158,7 @@ app.put('/api/rename', (req, res) => {
   });
 });
 
-// API: Delete a file
+// API: Delete
 app.delete('/api/delete/:filename', (req, res) => {
   const filePath = path.join(publicDir, req.params.filename);
   if (fs.existsSync(filePath)) {
@@ -171,10 +174,24 @@ app.delete('/api/delete/:filename', (req, res) => {
   }
 });
 
+// --- STATIC FILES ---
+// Serve uploaded images
+app.use(express.static(publicDir));
+
+// Serve React App
+const distDir = path.join(__dirname, 'dist');
+app.use(express.static(distDir));
+
+// SPA Fallback: Send index.html for any other requests
+// This must be LAST
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+  if (fs.existsSync(path.join(distDir, 'index.html'))) {
+     res.sendFile(path.join(distDir, 'index.html'));
+  } else {
+     res.status(404).send('App not built. Please run npm run build.');
+  }
 });
 
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`ServerGuard Node.js Server running on port ${PORT}`);
 });

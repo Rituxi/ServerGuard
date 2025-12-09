@@ -41,7 +41,7 @@ function App() {
   // API: Fetch assets from server
   const fetchAssets = useCallback(async () => {
     try {
-      const response = await fetch('/api/assets');
+      const response = await fetch('/api/assets?t=' + Date.now());
       if (response.ok) {
         const files = await response.json();
         const mappedAssets: HostedAsset[] = files.map((f: any) => {
@@ -67,30 +67,48 @@ function App() {
 
   const pingServer = useCallback(async () => {
     try {
-      const timestamp = Date.now();
-      // Try to ping the first asset found, or just root
-      let targetPath = '/';
-      if (assets.length > 0) {
-        targetPath = assets[0].url;
+      // Use explicit Health Check endpoint to verify Node.js is handling traffic
+      // Add timestamp to prevent caching
+      const response = await fetch('/api/health?t=' + Date.now());
+      
+      if (response.ok) {
+         // Verify it's actually JSON and not a 200 OK static HTML file
+         const contentType = response.headers.get("content-type");
+         if (contentType && contentType.indexOf("application/json") !== -1) {
+             const data = await response.json();
+             if (data.status === 'ok') {
+                 // Success - we are talking to Node.js
+                 return; 
+             }
+         }
       }
+      throw new Error("Invalid response");
 
-      await fetch(`${targetPath}?keepalive=${timestamp}`, { method: 'HEAD' });
-      addLog(`心跳成功：保持连接活跃中 (${targetPath})`, 'success');
     } catch (e) {
-      addLog(`心跳发送：服务器已响应请求`, 'info');
+      addLog(`连接警告：后端服务未响应。这可能是静态部署模式导致的。`, 'warning');
     }
-  }, [addLog, assets]);
+  }, [addLog]);
 
   const startServer = useCallback(() => {
     setStatus(prev => {
         if (prev === AppStatus.RUNNING) return prev;
         
         setStartTime(Date.now());
-        addLog('后端服务：已连接并监控中', 'info');
+        // Initial health check
+        fetch('/api/health?init=' + Date.now())
+            .then(res => {
+                if (!res.ok) throw new Error("Status not ok");
+                return res.json();
+            })
+            .then(() => {
+                 addLog('后端服务：连接成功 (Node.js)', 'success');
+            })
+            .catch(() => {
+                 addLog('后端服务：连接异常 - 似乎运行在纯静态模式，API 不可用', 'error');
+            });
         
         if (keepAliveIntervalRef.current) clearInterval(keepAliveIntervalRef.current);
         
-        setTimeout(pingServer, 1000); 
         keepAliveIntervalRef.current = setInterval(pingServer, PING_INTERVAL_MS);
         
         return AppStatus.RUNNING;
@@ -102,7 +120,7 @@ function App() {
     startServer();
     setCurrentUrl(window.location.origin);
     fetchAssets(); // Load initial assets from server
-    addLog('系统初始化：已连接到 Node.js 文件服务器', 'success');
+    addLog('系统初始化：正在尝试连接后端...', 'info');
 
     return () => {
       if (keepAliveIntervalRef.current) clearInterval(keepAliveIntervalRef.current);
@@ -121,7 +139,8 @@ function App() {
     formData.append('file', file);
 
     try {
-        const response = await fetch('/api/upload', {
+        // Use V2 endpoint to ensure we hit the updated Node route
+        const response = await fetch('/api/v2/upload', {
             method: 'POST',
             body: formData,
         });
@@ -130,11 +149,10 @@ function App() {
             addLog(`上传成功: ${file.name}`, 'success');
             await fetchAssets(); // Refresh list
         } else {
-            // Handle 405 Method Not Allowed specifically for Zeabur Static misconfiguration
+            // Handle 405 Method Not Allowed specifically
             if (response.status === 405) {
-                addLog(`上传失败: 部署模式错误 (405)。Zeabur 可能将其误判为静态网站。请检查 zbpack.json 是否生效。`, 'error');
+                addLog(`上传失败 (405): 请求被拦截。请确认 Zeabur 的 "zbpack.json" 已生效，且未配置为纯静态模式。`, 'error');
             } else {
-                // Try to parse detailed error message
                 try {
                     const errData = await response.json();
                     addLog(`上传失败: ${errData.message || '服务器内部错误'}`, 'error');
@@ -210,7 +228,7 @@ function App() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
               </svg>
             </div>
-            <h1 className="text-xl font-bold tracking-tight text-gray-900">ServerGuard <span className="text-gray-400 font-normal">资源卫士 v2.0</span></h1>
+            <h1 className="text-xl font-bold tracking-tight text-gray-900">ServerGuard <span className="text-gray-400 font-normal">资源卫士 v2.2</span></h1>
           </div>
           
           <div className="flex items-center gap-3">
@@ -237,12 +255,12 @@ function App() {
                 </svg>
              </div>
              <div className="flex-1">
-               <h4 className="font-bold text-purple-900 text-sm">已启用后端文件服务</h4>
+               <h4 className="font-bold text-purple-900 text-sm">使用说明</h4>
                <ul className="mt-1 text-sm text-purple-800 leading-relaxed list-disc list-inside space-y-1">
-                 <li>现在您可以直接点击下方的 <strong>“上传文件”</strong> 按钮。</li>
-                 <li>图片将直接保存到服务器的 <code>/public</code> 目录，并立即生效。</li>
+                 <li>点击下方的 <strong>“上传文件”</strong> 按钮上传图片。</li>
+                 <li>图片将保存到服务器的 <code>/public</code> 目录，并立即生效。</li>
                  <li>
-                   <strong>Zeabur 部署提示:</strong> 为了防止重启后文件丢失，建议在 Zeabur 设置中添加 Volume 挂载到 <code>/app/public</code>。
+                   <strong>重要配置:</strong> 部署成功后，请在 Zeabur 的 <strong>Settings (设置) &gt; Storage (硬盘)</strong> 中，添加一个挂载点到 <code>/app/public</code>，否则重启后图片会丢失。
                  </li>
                </ul>
              </div>
@@ -335,7 +353,7 @@ function App() {
             </code>
           </div>
           <div className="text-xs text-gray-400">
-             Node.js Powered • ServerGuard v2
+             Node.js Powered • ServerGuard v2.2
           </div>
         </div>
       </footer>

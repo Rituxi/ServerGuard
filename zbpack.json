@@ -3,6 +3,6 @@
     "command": "npm run build"
   },
   "server": {
-    "command": "npm start"
+    "command": "node server.js"
   }
 }

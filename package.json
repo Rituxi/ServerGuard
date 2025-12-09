@@ -1,15 +1,16 @@
 {
   "name": "serverguard-host",
-  "version": "2.0.0",
+  "version": "2.2.0",
   "private": true,
   "type": "module",
+  "main": "server.js",
   "engines": {
     "node": ">=18.0.0"
   },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "start": "npm run build && node server.js"
+    "start": "NODE_ENV=production node server.js"
   },
   "dependencies": {
     "cors": "^2.8.5",
